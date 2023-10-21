@@ -1,10 +1,6 @@
 from official.vision.ops.preprocess_ops import resize_and_crop_image
 import cv2 
-model_dect_dir="det_model"
-model_seg_dir="seg_model"
 import tensorflow as tf
-imported = tf.saved_model.load(model_dect_dir)
-model_fn = imported.signatures['serving_default']
 
 category_index={
     1: {
@@ -42,21 +38,23 @@ def save_uploaded_file(uploaded_file):
        
         return None
 
-st.title("Upload Image and Get Path")
+st.title("Tongue Diagnosis Model")
+st.header("Make by Dr. Vu Duc Dai in VietNam")
+st.subheader("Application for LucKhi")
 
 uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+
 
 if uploaded_file is not None:
     file_path = save_uploaded_file(uploaded_file)
     if file_path is not None:
-        st.write(f"Saved to temporary path: {file_path}")
-        st.image(file_path)
+        st.info("Image analysis")
+        progress = st.progress(0, text="Image processing, please wait")
         img_path=file_path
         #Load model
-        st.write(" Đang tải model")
+        model_dect_dir="tongue_obj_dect_model"
         imported = tf.saved_model.load(model_dect_dir)
         model_fn = imported.signatures['serving_default']
-        st.write(' Đang thực hiện dự đoán')
         # Dự đoán từ model
         from PIL import Image
         import numpy as np
@@ -64,10 +62,8 @@ if uploaded_file is not None:
         import matplotlib.pyplot as plt
         from matplotlib.patches import Rectangle
 
-        # Assuming your visualization_utils and model_fn are imported/defined above
 
-        # File path of the image you want to process
-
+        
 
         # Load and preprocess the image
         image_raw = Image.open(img_path)
@@ -77,14 +73,16 @@ if uploaded_file is not None:
         image1 = build_inputs_for_object_detection(image_np, input_image_size)
         image = tf.expand_dims(image1, axis=0)
         image = tf.cast(image, dtype=tf.uint8)
+        progress.progress(1/5) 
 
         # Predict using your model
         result = model_fn(image)
 
         boxes=result['detection_boxes'][0,0].numpy()
         score=result['detection_scores'][0,0].numpy()
-                
-        st.write( 'Đang hiển thị hình ảnh')
+        
+
+        #Show image        
         import matplotlib.pyplot as plt
         import matplotlib.patches as patches
         
@@ -92,6 +90,7 @@ if uploaded_file is not None:
         image_np = (image_np).astype('uint8')
         #plt.imshow(image_np)
         
+       
 
 
         y_min, x_min, y_max, x_max = boxes
@@ -99,7 +98,7 @@ if uploaded_file is not None:
         fig, ax = plt.subplots(1)
 
         image_np_crop = image_np[int(y_min):int(y_max), int(x_min):int(x_max)]
-        st.image(image_np_crop)
+        
         # Chuyển đổi từ BGR sang RGB
         image_np_crop = cv2.cvtColor(image_np_crop, cv2.COLOR_BGR2RGB)
 
@@ -109,14 +108,18 @@ if uploaded_file is not None:
         # Lưu hình ảnh cropped vào tệp tạm thời
         cv2.imwrite(crop_img_path, image_np_crop)
         # Hiển thị hình ảnh sử dụng Streamlit
-        st.image(crop_img_path)
+        progress.progress(2/5)  # Cập nhật progress bar sau bước 2
 
-        #Tải model segment
-        st.write("Đang tải model segment")
+        #Load segment model
+        
+        model_seg_dir="seg_model"
         imported = tf.saved_model.load(model_seg_dir)
         model_sg = imported.signatures['serving_default']
         
-        st.write("Thực hiện cắt ảnh")
+        
+        
+
+        
         
         def load_image(image_path, height, width):
             img = tf.io.read_file(image_path)
@@ -149,9 +152,9 @@ if uploaded_file is not None:
             seg_img_path = f.name
             tf.keras.preprocessing.image.save_img(seg_img_path, segmented_img)
         
-        st.image(seg_img_path, caption="Hình ảnh đã được segment.", use_column_width=True)
+        progress.progress(3/5)  # Cập nhật progress bar sau bước 3
         
-        #Làm nổi màu đỏ
+        #Show the result
         import cv2
         import numpy as np
         import cv2
@@ -176,7 +179,6 @@ if uploaded_file is not None:
         
         # Tính toán phần tử object
         # @title Tính toán phần tử Object detection
-        st.write("doan giua")
         import cv2
         import numpy as np
 
@@ -231,9 +233,8 @@ if uploaded_file is not None:
         # Extract the Hue, Saturation, and Value channels
        
         (h2, s2, v2) = cv2.split(segmented_image_hsv)
-        st.write('Đã tính toán xong')
         
-
+        progress.progress(4/5)  # Cập nhật progress bar sau bước 3
         # @title In ra hình ảnh bỏ bin đầu
         import matplotlib.pyplot as plt
         import matplotlib.gridspec as gridspec
@@ -390,6 +391,19 @@ if uploaded_file is not None:
         ax14.axis('off')
         
         st.pyplot(plt)
+        progress.progress(5/5) 
+        from io import BytesIO
+        # Lưu biểu đồ vào một BytesIO object
+        buffer = BytesIO()
+        plt.savefig(buffer, format="png")
+        buffer.seek(0)
+        # Nút tải biểu đồ về dưới dạng ảnh
+        st.download_button(
+            label="Download infographic",
+            data=buffer,
+            file_name='tongue_infographic.png',
+            mime='image/png'
+                            )
         
 
 
